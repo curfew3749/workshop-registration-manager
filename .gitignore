@@ -1,0 +1,13 @@
+# macOS
+.DS_Store
+
+# Node modules (if added later)
+node_modules/
+
+# Logs
+*.log
+
+# VS Code workspace settings
+.vscode/settings.json
+.vscode/tasks.json
+.vscode/launch.json
