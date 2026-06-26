@@ -1,0 +1,35 @@
+{
+  "timeZone": "America/New_York",
+  "exceptionLogging": "STACKDRIVER",
+  "runtimeVersion": "V8",
+  "oauthScopes": [
+    "https://www.googleapis.com/auth/forms.currentonly",
+    "https://www.googleapis.com/auth/script.container.ui",
+    "https://www.googleapis.com/auth/script.scriptapp",
+    "https://www.googleapis.com/auth/calendar",
+    "https://www.googleapis.com/auth/userinfo.email"
+  ],
+  "addOns": {
+    "common": {
+      "name": "Workshop Registration Manager",
+      "logoUrl": "https://www.gstatic.com/images/branding/product/1x/forms_48dp.png",
+      "layoutProperties": {
+        "primaryColor": "#673AB7"
+      },
+      "homepageTrigger": {
+        "runFunction": "showHome",
+        "enabled": true
+      }
+    },
+    "forms": {}
+  },
+  "dependencies": {
+    "enabledAdvancedServices": [
+      {
+        "userSymbol": "Calendar",
+        "version": "v3",
+        "serviceId": "calendar"
+      }
+    ]
+  }
+}

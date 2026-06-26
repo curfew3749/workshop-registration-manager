@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 14px;
+    }
+
+    h2 {
+      margin-top: 0;
+    }
+
+    h3 {
+      margin-bottom: 6px;
+      margin-top: 18px;
+    }
+
+    label {
+      font-weight: bold;
+      display: block;
+      margin-top: 14px;
+    }
+
+    select, input {
+      width: 100%;
+      box-sizing: border-box;
+      margin-top: 5px;
+      padding: 6px;
+    }
+
+    table {
+      width: 100%;
+      margin-top: 10px;
+      border-collapse: collapse;
+    }
+
+    th, td {
+      text-align: left;
+      padding: 6px 2px;
+      vertical-align: top;
+      font-size: 12px;
+    }
+
+    button {
+      margin-top: 10px;
+      width: 100%;
+      padding: 9px;
+      background: #673ab7;
+      color: white;
+      border: 0;
+      cursor: pointer;
+      font-weight: bold;
+    }
+
+    .secondary {
+      background: #f1f1f1;
+      color: #222;
+    }
+
+    .muted {
+      color: #666;
+      font-size: 12px;
+      margin-top: 5px;
+    }
+
+    .status {
+      margin-top: 12px;
+      font-size: 13px;
+      white-space: pre-wrap;
+    }
+
+    .card {
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 10px;
+      margin-top: 12px;
+      background: #fff;
+    }
+
+    .healthy {
+      color: #137333;
+      font-weight: bold;
+    }
+
+    .warning {
+      color: #b06000;
+      font-weight: bold;
+    }
+
+    .full {
+      font-weight: bold;
+      color: #b00020;
+    }
+
+    .hidden {
+      display: none;
+    }
+  </style>
+</head>
+
+<body>
+  <h2>Workshop Registration</h2>
+
+  <div id="dashboardView">
+    <div class="card">
+      <h3>System Health</h3>
+      <div id="healthSummary" class="muted">Loading...</div>
+    </div>
+
+    <div class="card">
+      <h3>Sessions</h3>
+      <div id="sessionSummary" class="muted">Loading sessions...</div>
+    </div>
+
+    <div class="card">
+      <h3>Health Checks</h3>
+      <div id="healthChecks" class="muted">Loading checks...</div>
+    </div>
+
+    <button onclick="refreshCapacity()">Refresh Capacity</button>
+    <button class="secondary" onclick="showConfig()">Show Configuration</button>
+  </div>
+
+  <div id="configView" class="hidden">
+    <button class="secondary" onclick="showDashboard()">Back to Dashboard</button>
+
+    <label>Session Question</label>
+    <select id="registrationQuestion"></select>
+
+    <label>Email Source</label>
+    <div id="emailSource" class="muted">
+      Checking email settings...
+    </div>
+
+    <label>Calendar</label>
+    <select id="calendar"></select>
+    <div class="muted">Choose a calendar, then load sessions.</div>
+
+    <button onclick="loadSessions()">Load Sessions</button>
+
+    <div id="sessions"></div>
+
+    <button onclick="saveConfig()">Save Configuration</button>
+  </div>
+
+  <div id="status" class="status"></div>
+
+<script>
+let appData = null;
+let events = [];
+
+function setStatus(message) {
+  document.getElementById('status').innerText = message || '';
+}
+
+function showConfig() {
+  document.getElementById('dashboardView').classList.add('hidden');
+  document.getElementById('configView').classList.remove('hidden');
+  setStatus('');
+}
+
+function showDashboard() {
+  document.getElementById('configView').classList.add('hidden');
+  document.getElementById('dashboardView').classList.remove('hidden');
+  setStatus('');
+  loadDashboard();
+}
+
+function fillSelect(selectId, items, selectedId) {
+  const select = document.getElementById(selectId);
+  select.innerHTML = '';
+
+  items.forEach(item => {
+    const option = document.createElement('option');
+    option.value = item.id;
+    option.textContent = item.title || item.name || item.label || item.id;
+    option.selected = item.id === selectedId;
+    select.appendChild(option);
+  });
+}
+
+function loadDashboard() {
+  document.getElementById('healthSummary').innerText = 'Loading...';
+  document.getElementById('sessionSummary').innerText = 'Loading sessions...';
+  document.getElementById('healthChecks').innerText = 'Loading checks...';
+
+  google.script.run
+    .withSuccessHandler(data => {
+      renderDashboard(data);
+    })
+    .withFailureHandler(err => {
+      document.getElementById('healthSummary').innerText =
+        'Dashboard failed: ' + err.message;
+    })
+    .getDashboardData();
+}
+
+function renderDashboard(data) {
+  const healthSummary = document.getElementById('healthSummary');
+  const sessionSummary = document.getElementById('sessionSummary');
+  const healthChecks = document.getElementById('healthChecks');
+
+  healthSummary.innerHTML = data.health.healthy
+    ? '<span class="healthy">Healthy</span>'
+    : '<span class="warning">Needs attention</span>';
+
+  if (!data.sessions || data.sessions.length === 0) {
+    sessionSummary.innerHTML = '<div class="muted">No sessions configured yet.</div>';
+  } else {
+    let sessionHtml = '<table>';
+    sessionHtml += '<tr><th>Session</th><th>Status</th></tr>';
+
+    data.sessions.forEach(session => {
+      const status = session.full
+        ? '<span class="full">FULL (' + session.used + '/' + session.capacity + ')</span>'
+        : session.used + '/' + session.capacity + ' registered';
+
+      sessionHtml += '<tr>';
+      sessionHtml += '<td>' + escapeHtml(session.key) + '</td>';
+      sessionHtml += '<td>' + status + '</td>';
+      sessionHtml += '</tr>';
+    });
+
+    sessionHtml += '</table>';
+    sessionSummary.innerHTML = sessionHtml;
+  }
+
+  let checksHtml = '<table>';
+
+  data.health.checks.forEach(check => {
+    checksHtml += '<tr>';
+    checksHtml += '<td>' + (check.ok ? '✓' : '⚠') + '</td>';
+    checksHtml += '<td>' + escapeHtml(check.label) + '</td>';
+    checksHtml += '</tr>';
+  });
+
+  checksHtml += '</table>';
+  healthChecks.innerHTML = checksHtml;
+}
+
+function loadInitial() {
+  setStatus('Loading configuration...');
+
+  google.script.run
+    .withSuccessHandler(data => {
+      appData = data;
+
+      fillSelect(
+        'registrationQuestion',
+        data.registrationQuestions,
+        data.config.registrationQuestion.id
+      );
+
+      fillSelect(
+        'calendar',
+        data.calendars,
+        data.config.calendarId
+      );
+
+      document.getElementById('emailSource').innerText = data.collectsEmail
+        ? 'Using the email address collected by Google Forms.'
+        : 'Warning: this form is not collecting email addresses. Enable “Collect email addresses” in Form Settings before using Calendar invites.';
+
+      setStatus('');
+      loadDashboard();
+    })
+    .withFailureHandler(err => setStatus(err.message))
+    .getSidebarData();
+}
+
+function loadSessions() {
+  const questionId = document.getElementById('registrationQuestion').value;
+  const calendarId = document.getElementById('calendar').value;
+
+  setStatus('Loading choices...');
+
+  google.script.run
+    .withSuccessHandler(choiceValues => {
+      setStatus('Choices loaded. Loading events...');
+
+      google.script.run
+        .withSuccessHandler(eventList => {
+          events = Array.isArray(eventList) ? eventList : [];
+          renderSessions(choiceValues);
+
+          setStatus(
+            'Sessions loaded. Events loaded: ' + events.length
+          );
+        })
+        .withFailureHandler(err => {
+          events = [];
+          renderSessions(choiceValues);
+          setStatus('Choices loaded, but events failed: ' + err.message);
+        })
+        .getEventsForSidebar(calendarId);
+    })
+    .withFailureHandler(err => setStatus('Choices failed: ' + err.message))
+    .getChoicesForSidebar(questionId);
+}
+
+function renderSessions(choiceValues) {
+  const savedSessions = appData.config.sessions || [];
+  const container = document.getElementById('sessions');
+
+  let html = '<table>';
+  html += '<tr><th>Session</th><th>Capacity</th><th>Event</th></tr>';
+
+  choiceValues.forEach(choice => {
+    const saved = savedSessions.find(s => s.key === choice) || {};
+    const capacity = saved.capacity || 1;
+
+    html += '<tr>';
+    html += '<td>' + escapeHtml(choice) + '</td>';
+    html += '<td><input type="number" min="1" value="' + capacity + '" data-key="' + escapeHtml(choice) + '" class="capacity"></td>';
+    html += '<td><select class="event">';
+
+    html += '<option value="">No invite</option>';
+
+    events.forEach(event => {
+      const eventId = event.id || '';
+      const eventLabel = getEventLabel(event);
+      const selected = saved.eventId === eventId ? ' selected' : '';
+
+      html += '<option value="' + escapeHtml(eventId) + '"' + selected + '>' +
+        escapeHtml(eventLabel) +
+        '</option>';
+    });
+
+    html += '</select></td>';
+    html += '</tr>';
+  });
+
+  html += '</table>';
+  container.innerHTML = html;
+}
+
+function refreshCapacity() {
+  setStatus('Refreshing capacity...');
+
+  google.script.run
+    .withSuccessHandler(() => {
+      setStatus('Capacity refreshed.');
+      loadDashboard();
+    })
+    .withFailureHandler(err => {
+      setStatus('Refresh failed: ' + err.message);
+    })
+    .refreshCapacityFromMenu();
+}
+
+function getEventLabel(event) {
+  if (!event) return 'Untitled event';
+
+  return event.label ||
+    event.displayName ||
+    event.title ||
+    event.summary ||
+    event.id ||
+    'Untitled event';
+}
+
+function saveConfig() {
+  const rows = document.querySelectorAll('.capacity');
+  const eventSelects = document.querySelectorAll('.event');
+
+  const sessions = [];
+
+  rows.forEach((input, index) => {
+    const eventSelect = eventSelects[index];
+    const eventId = eventSelect.value;
+    const event = events.find(e => e.id === eventId);
+
+    sessions.push({
+      key: input.getAttribute('data-key'),
+      capacity: Number(input.value),
+      eventId: eventId,
+      eventTitle: event ? getEventLabel(event) : ''
+    });
+  });
+
+  const payload = {
+    registrationQuestionId: document.getElementById('registrationQuestion').value,
+    emailQuestionId: '',
+    calendarId: document.getElementById('calendar').value,
+    sessions: sessions
+  };
+
+  setStatus('Saving...');
+
+  google.script.run
+    .withSuccessHandler(() => {
+      setStatus('Saved.');
+      loadDashboard();
+      showDashboard();
+    })
+    .withFailureHandler(err => setStatus(err.message))
+    .saveSidebarConfig(payload);
+}
+
+function escapeHtml(value) {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+loadInitial();
+</script>
+</body>
+</html>
