@@ -139,40 +139,9 @@ function showHelpDialog() {
   );
 }
 
-function debugCalendarForSidebar(calendarId) {
-  const calendar = CalendarApp.getCalendarById(calendarId);
 
-  if (!calendar) {
-    return {
-      found: false,
-      calendarId: calendarId,
-      calendarName: '',
-      eventCount: 0
-    };
-  }
 
-  const start = new Date();
-  const end = new Date();
-  end.setDate(start.getDate() + 90);
 
-  const events = calendar.getEvents(start, end);
-
-  return {
-    found: true,
-    calendarId: calendar.getId(),
-    calendarName: calendar.getName(),
-    eventCount: events.length,
-    firstEvent: events.length ? events[0].getTitle() : ''
-  };
-}
-
-function debugConfig() {
-  const config = getConfig_();
-
-  Logger.log(JSON.stringify(config, null, 2));
-
-  return config;
-}
 
 function getDashboardData() {
   return getDashboardData_();
